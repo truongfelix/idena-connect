@@ -107,9 +107,7 @@ const server = http.createServer(async (req, res) => {
       if (!session || typeof address !== 'string') return json(res, {success: false, error: 'unknown token'})
       // A token signs in once: after its sign-in (and a disconnect) it never takes another address.
       if (session.used) return json(res, {success: false, error: 'already signed in'})
-      // One nonce at a time: a second request while one is pending would cancel the person's sign-in.
-      if (session.nonce && Date.now() - session.nonceAt <= 5 * 60 * 1000)
-        return json(res, {success: false, error: 'sign-in already started'})
+      // A new request replaces a pending nonce: the person can retry (README, section 2).
       session.address = address.toLowerCase()
       // The nonce names this site (README, section 2): the app signs it only for this site. It serves 5 minutes.
       session.nonce = `signin-${new URL(BASE).host}/${crypto.randomUUID()}`

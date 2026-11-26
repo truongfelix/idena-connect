@@ -25,7 +25,8 @@ Your page                      Idena desktop app                       Your serv
 ```
 
 The token is how your page and your server recognise the same sign-in: your page makes it, puts it in the link, and
-asks your server whether it is signed in (or your server sets a session cookie on the callback page).
+asks your server whether it is signed in (or your server sets a session cookie on the callback page). Either way,
+whoever holds the token gets the sign-in: section 2 says what protects the person.
 
 ## 1. The link
 
@@ -51,7 +52,9 @@ website by the host that receives the signature, and shows a red warning when th
 ```
 
 The nonce must start with `signin-` (the app refuses any other). Make it random, use it once, and let it expire
-after a few minutes. To refuse, answer `{"success": false, "error": "<message>"}`: the app shows the message.
+after a few minutes. A new request for the token replaces a pending nonce, so the person can retry (whoever holds
+the token can also start it over: on your own page, only the person). To refuse, answer
+`{"success": false, "error": "<message>"}`: the app shows the message.
 
 **Name your site in the nonce:** `signin-` + your host + `/` + the random part, for example
 `signin-your.site/3f9c…`. The host is the authentication endpoint's, as JavaScript's `new URL(…).host` gives it:

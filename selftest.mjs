@@ -32,8 +32,6 @@ const kept = await (await fetch(`${BASE}/status.json?token=${token}`)).json()
 const html2 = await (await fetch(BASE + '/')).text()
 const token2 = new URL(html2.match(/href="(dna:[^"]+)"/)[1].replaceAll('&#38;', '&')).searchParams.get('token')
 const {data: {nonce: nonce2}} = await post('/auth/v1/start-session', {token: token2, address})
-// One nonce at a time: a second request for the token while it is pending is refused.
-const pending = await post('/auth/v1/start-session', {token: token2, address: '0x' + '2'.repeat(40)})
 const bad = await post('/auth/v1/authenticate', {token: token2, signature: sign(nonce2, secp256k1.utils.randomSecretKey())})
 // Disconnect: another key's signature is refused, the account's own ends its session.
 const time = Math.floor(Date.now() / 1000)
@@ -45,8 +43,8 @@ const after = await (await fetch(`${BASE}/status.json?token=${token}`)).json()
 const reuse = await post('/auth/v1/start-session', {token, address})
 const ok =
   good.data.authenticated === true && status.signedIn === true && bad.data.authenticated === false &&
-  named && pending.success === false && reuse.success === false && replay.success === false && swap.success === false && kept.address === address && kept.signedIn === true &&
+  named && reuse.success === false && replay.success === false && swap.success === false && kept.address === address && kept.signedIn === true &&
   refused.success === false && stale.success === false && disconnected.data?.disconnected === true && after.signedIn === false
-console.log(JSON.stringify({nonce, pending: pending.error, reuse: reuse.error, replay: replay.error, swap: swap.error, good: good.data, status, bad: bad.data, refused: refused.error, stale: stale.error, disconnected: disconnected.data, after}))
+console.log(JSON.stringify({nonce, reuse: reuse.error, replay: replay.error, swap: swap.error, good: good.data, status, bad: bad.data, refused: refused.error, stale: stale.error, disconnected: disconnected.data, after}))
 console.log(ok ? 'SELFTEST PASS' : 'SELFTEST FAIL')
 process.exit(ok ? 0 : 1)
