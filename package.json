@@ -1,0 +1,20 @@
+{
+  "name": "idena-connect-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sign in with Idena (Idena Connect): an example website and the protocol, for website developers",
+  "type": "module",
+  "license": "MIT",
+  "author": "truongfelix (https://github.com/truongfelix)",
+  "scripts": {
+    "start": "node server.mjs",
+    "selftest": "node selftest.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0"
+  }
+}
