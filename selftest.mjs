@@ -28,6 +28,11 @@ const named = nonce.startsWith(`signin-${new URL(BASE).host}/`)
 const replay = await post('/auth/v1/authenticate', {token, signature: sign(nonce, key)})
 const swap = await post('/auth/v1/start-session', {token, address: '0x' + '1'.repeat(40)})
 const kept = await (await fetch(`${BASE}/status.json?token=${token}`)).json()
+// The callback gives the session to the first browser that opens it, never again.
+const first = await fetch(`${BASE}/done?token=${token}`)
+const firstOk = /^session=/.test(first.headers.get('set-cookie') || '') && (await first.text()).includes('Signed in')
+const again = await (await fetch(`${BASE}/done?token=${token}`)).text()
+const once = firstOk && again.includes('Not signed in')
 // A control: another key's signature is refused.
 const html2 = await (await fetch(BASE + '/')).text()
 const token2 = new URL(html2.match(/href="(dna:[^"]+)"/)[1].replaceAll('&#38;', '&')).searchParams.get('token')
@@ -40,10 +45,11 @@ const refused = await post('/auth/v1/disconnect', {address, time, signature: sig
 const stale = await post('/auth/v1/disconnect', {address, time: time - 3600, signature: sign(`disconnect-${BASE}-${time - 3600}`, key)})
 const disconnected = await post('/auth/v1/disconnect', {address, time, signature: sign(message, key)})
 const after = await (await fetch(`${BASE}/status.json?token=${token}`)).json()
+const reuse = await post('/auth/v1/start-session', {token, address})
 const ok =
   good.data.authenticated === true && status.signedIn === true && bad.data.authenticated === false &&
-  named && replay.success === false && swap.success === false && kept.address === address && kept.signedIn === true &&
+  named && once && reuse.success === false && replay.success === false && swap.success === false && kept.address === address && kept.signedIn === true &&
   refused.success === false && stale.success === false && disconnected.data?.disconnected === true && after.signedIn === false
-console.log(JSON.stringify({nonce, replay: replay.error, swap: swap.error, good: good.data, status, bad: bad.data, refused: refused.error, stale: stale.error, disconnected: disconnected.data, after}))
+console.log(JSON.stringify({nonce, once, reuse: reuse.error, replay: replay.error, swap: swap.error, good: good.data, status, bad: bad.data, refused: refused.error, stale: stale.error, disconnected: disconnected.data, after}))
 console.log(ok ? 'SELFTEST PASS' : 'SELFTEST FAIL')
 process.exit(ok ? 0 : 1)

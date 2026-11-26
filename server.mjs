@@ -12,7 +12,7 @@ const PORT = Number(process.argv[2] || 29780)
 
 // 127.0.0.1, not localhost: the app's requests could try ::1 first, where nothing listens.
 const BASE = `http://127.0.0.1:${PORT}`
-// token -> {address, nonce, nonceAt, signedIn}
+// token -> {address, nonce, nonceAt, signedIn, used (signed in once), cookie (the browser's session, set once)}
 const sessions = new Map()
 
 const hex = (bytes) => Buffer.from(bytes).toString('hex')
@@ -90,7 +90,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/') {
       const token = crypto.randomUUID()
-      sessions.set(token, {address: null, nonce: null, nonceAt: 0, signedIn: false})
+      sessions.set(token, {address: null, nonce: null, nonceAt: 0, signedIn: false, used: false, cookie: null})
       const link = signInLink(token)
       console.log(`LINK ${link}`)
       return send(res, 200, 'text/html', page(`<h1>Idena Connect test site</h1>
@@ -105,8 +105,8 @@ const server = http.createServer(async (req, res) => {
       const {token, address} = await readJson(req)
       const session = sessions.get(token)
       if (!session || typeof address !== 'string') return json(res, {success: false, error: 'unknown token'})
-      // A token signs in once: its address never changes afterwards.
-      if (session.signedIn) return json(res, {success: false, error: 'already signed in'})
+      // A token signs in once: after its sign-in (and a disconnect) it never takes another address.
+      if (session.used) return json(res, {success: false, error: 'already signed in'})
       session.address = address.toLowerCase()
       // The nonce names this site (README, section 2): the app signs it only for this site. It serves 5 minutes.
       session.nonce = `signin-${new URL(BASE).host}/${crypto.randomUUID()}`
@@ -123,9 +123,12 @@ const server = http.createServer(async (req, res) => {
         return json(res, {success: false, error: 'nonce expired'})
       }
       const signer = signerOf(session.nonce, signature)
-      // A nonce serves once, signed or not: a wrong signature does not sign anyone out, a right one is not reusable.
-      session.nonce = null
-      if (signer === session.address) session.signedIn = true
+      // A signed nonce serves once; a wrong signature changes nothing (nobody else can cancel the person's sign-in).
+      if (signer === session.address) {
+        session.nonce = null
+        session.signedIn = true
+        session.used = true
+      }
       console.log(`AUTH token=${token} signer=${signer} authenticated=${session.signedIn}`)
       return json(res, {success: true, data: {authenticated: session.signedIn}})
     }
@@ -148,11 +151,15 @@ const server = http.createServer(async (req, res) => {
       return json(res, {success: true, data: {disconnected: true}})
     }
     if (req.method === 'GET' && url.pathname === '/done') {
+      // The callback the app opens in the person's browser: the session goes to this browser (a cookie), once. A
+      // page that started the sign-in with this site's token and endpoints gets nothing by holding the token.
       const session = sessions.get(url.searchParams.get('token'))
-      return send(res, 200, 'text/html', page(session?.signedIn
-        ? `<h1>Signed in</h1><p>As <code>${escape(session.address)}</code>.</p>`
-        : '<h1>Not signed in</h1>'))
+      if (!session?.signedIn || session.cookie) return send(res, 200, 'text/html', page('<h1>Not signed in</h1>'))
+      session.cookie = crypto.randomUUID()
+      res.setHeader('set-cookie', `session=${session.cookie}; HttpOnly; SameSite=Lax; Path=/`)
+      return send(res, 200, 'text/html', page(`<h1>Signed in</h1><p>As <code>${escape(session.address)}</code>.</p>`))
     }
+    // For the self-test and the app's tests only: a real site never tells anyone by token who signed in.
     if (req.method === 'GET' && url.pathname === '/status.json') {
       const session = sessions.get(url.searchParams.get('token'))
       return json(res, session ? {address: session.address, signedIn: session.signedIn} : null)
