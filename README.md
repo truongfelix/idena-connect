@@ -147,6 +147,8 @@ server prints each step (`START`, `AUTH`, `DISCONNECT`).
 - A sign-in proves the person holds the address's key at that moment, nothing more. Bind the nonce to its token,
   use it once and let it expire.
 - The person sees the host that receives the signature: serve the endpoints from the website people know.
+- The app never signs a text starting with `signin-` or `disconnect-` through a general signing link (`dna://sign`):
+  those texts are signed only in its own sign-in and Disconnect, so another page cannot collect them for your site.
 - Never ask for a private key or a seed phrase: the app never needs to give one.
 
 ## License
