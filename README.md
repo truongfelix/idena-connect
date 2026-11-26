@@ -54,16 +54,26 @@ The nonce must start with `signin-` (the app refuses any other). Make it random,
 after a few minutes. To refuse, answer `{"success": false, "error": "<message>"}`: the app shows the message.
 
 **Name your site in the nonce:** `signin-` + your host + `/` + the random part, for example
-`signin-your.site/3f9c…`. The host is the authentication endpoint's, written as JavaScript's `new URL(…).host`
-writes it: lower case, with the port only when it is not the protocol's default (`your.site`, `127.0.0.1:29780`).
-The app compares it with the host of both endpoints of the link and refuses the sign-in when it differs ("This
-sign-in was made for your.site, not other.site").
+`signin-your.site/3f9c…`. The host is the authentication endpoint's, as JavaScript's `new URL(…).host` gives it:
+compute it from the endpoint's URL with your URL library rather than writing it by hand (lower case, the port only
+when it is not the protocol's default, an international name in its `xn--` form, an IPv6 address in brackets:
+`your.site`, `127.0.0.1:29780`). Serve the nonce endpoint on that same host. The app takes the text before the first
+`/` as a site name when it holds a `.` or a `:`, compares it with the host of both endpoints of the link, and refuses
+the sign-in when it differs ("This sign-in was made for your.site, not other.site").
 
 Without it, another website that offers Sign in with Idena can sign a person in to yours: it asks your nonce
 endpoint for a nonce for the person's address and hands that nonce to the app as its own. The app shows the other
-website, the person confirms, and the other website passes the signature on to your authentication endpoint. A
-nonce naming your host is refused anywhere else. The community desktop app checks it from the release after
-v0.45.0; a nonce with no `/` is still accepted, without that protection.
+website, the person confirms, and the other website passes the signature on to your authentication endpoint. The
+community desktop app, from the release after v0.45.0, refuses a nonce naming your host for any other site. Other
+Idena apps, and earlier versions, sign it for any site, and a site cannot tell which app signed: keep binding each
+nonce to its token, using it once and letting it expire. A nonce naming no site (no `/`) is still accepted, without
+that protection.
+
+**Keep the callback on your own site.** Another page can also build a link with your own endpoints and a token it
+got from your page, and only its own `callback_url`: the signature then really goes to you, and that page holds the
+token. The app shows as the website the host that receives the signature, and warns when the callback is on another
+site ("After the sign-in you go to other.site, not your.site"). Put `callback_url` on your site (another host of it,
+`www.` or `api.`, shows no warning), so that the warning only ever shows for such a page.
 
 ## 3. The authentication endpoint
 
@@ -158,7 +168,8 @@ server prints each step (`START`, `AUTH`, `DISCONNECT`).
 
 - A sign-in proves the person holds the address's key at that moment, nothing more. Bind the nonce to its token,
   use it once and let it expire.
-- Name your host in the nonce (section 2), so that no other website can pass your nonce on as its own.
+- Name your host in the nonce (section 2), so that the community desktop app does not sign your nonce for another
+  website, and keep the callback on your own site.
 - The person sees the host that receives the signature: serve the endpoints from the website people know.
 - The app never signs a text starting with `signin-` or `disconnect-` through a general signing link (`dna://sign`):
   those texts are signed only in its own sign-in and Disconnect, so another page cannot collect them for your site.

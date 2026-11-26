@@ -12,7 +12,7 @@ const PORT = Number(process.argv[2] || 29780)
 
 // 127.0.0.1, not localhost: the app's requests could try ::1 first, where nothing listens.
 const BASE = `http://127.0.0.1:${PORT}`
-// token -> {address, nonce, signedIn}
+// token -> {address, nonce, nonceAt, signedIn}
 const sessions = new Map()
 
 const hex = (bytes) => Buffer.from(bytes).toString('hex')
@@ -90,7 +90,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/') {
       const token = crypto.randomUUID()
-      sessions.set(token, {address: null, nonce: null, signedIn: false})
+      sessions.set(token, {address: null, nonce: null, nonceAt: 0, signedIn: false})
       const link = signInLink(token)
       console.log(`LINK ${link}`)
       return send(res, 200, 'text/html', page(`<h1>Idena Connect test site</h1>
@@ -105,9 +105,12 @@ const server = http.createServer(async (req, res) => {
       const {token, address} = await readJson(req)
       const session = sessions.get(token)
       if (!session || typeof address !== 'string') return json(res, {success: false, error: 'unknown token'})
+      // A token signs in once: its address never changes afterwards.
+      if (session.signedIn) return json(res, {success: false, error: 'already signed in'})
       session.address = address.toLowerCase()
-      // The nonce names this site (README, section 2): the app signs it only for this site.
+      // The nonce names this site (README, section 2): the app signs it only for this site. It serves 5 minutes.
       session.nonce = `signin-${new URL(BASE).host}/${crypto.randomUUID()}`
+      session.nonceAt = Date.now()
       console.log(`START token=${token} address=${session.address}`)
       return json(res, {success: true, data: {nonce: session.nonce}})
     }
@@ -115,8 +118,14 @@ const server = http.createServer(async (req, res) => {
       const {token, signature} = await readJson(req)
       const session = sessions.get(token)
       if (!session?.nonce || typeof signature !== 'string') return json(res, {success: false, error: 'no session'})
+      if (Date.now() - session.nonceAt > 5 * 60 * 1000) {
+        session.nonce = null
+        return json(res, {success: false, error: 'nonce expired'})
+      }
       const signer = signerOf(session.nonce, signature)
-      session.signedIn = signer === session.address
+      // A nonce serves once, signed or not: a wrong signature does not sign anyone out, a right one is not reusable.
+      session.nonce = null
+      if (signer === session.address) session.signedIn = true
       console.log(`AUTH token=${token} signer=${signer} authenticated=${session.signedIn}`)
       return json(res, {success: true, data: {authenticated: session.signedIn}})
     }

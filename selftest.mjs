@@ -1,5 +1,6 @@
 // Self-test of server.mjs without the app: a random key signs in as the app would (start-session, the node's
-// doubleHash signature, authenticate), then disconnects (a stale time and another key's signature refused).
+// doubleHash signature, authenticate; the nonce names the site and serves once, the token keeps its address), then
+// disconnects (a stale time and another key's signature refused).
 // Usage: node selftest.mjs [port], with server.mjs running.
 import {secp256k1} from '@noble/curves/secp256k1.js'
 import {keccak_256 as keccak} from '@noble/hashes/sha3.js'
@@ -22,6 +23,11 @@ const sign = (nonce, k) => {
 const {data: {nonce}} = await post('/auth/v1/start-session', {token, address})
 const good = await post('/auth/v1/authenticate', {token, signature: sign(nonce, key)})
 const status = await (await fetch(`${BASE}/status.json?token=${token}`)).json()
+// The nonce names this site; it serves once; a signed-in token keeps its address.
+const named = nonce.startsWith(`signin-${new URL(BASE).host}/`)
+const replay = await post('/auth/v1/authenticate', {token, signature: sign(nonce, key)})
+const swap = await post('/auth/v1/start-session', {token, address: '0x' + '1'.repeat(40)})
+const kept = await (await fetch(`${BASE}/status.json?token=${token}`)).json()
 // A control: another key's signature is refused.
 const html2 = await (await fetch(BASE + '/')).text()
 const token2 = new URL(html2.match(/href="(dna:[^"]+)"/)[1].replaceAll('&#38;', '&')).searchParams.get('token')
@@ -36,7 +42,8 @@ const disconnected = await post('/auth/v1/disconnect', {address, time, signature
 const after = await (await fetch(`${BASE}/status.json?token=${token}`)).json()
 const ok =
   good.data.authenticated === true && status.signedIn === true && bad.data.authenticated === false &&
+  named && replay.success === false && swap.success === false && kept.address === address && kept.signedIn === true &&
   refused.success === false && stale.success === false && disconnected.data?.disconnected === true && after.signedIn === false
-console.log(JSON.stringify({good: good.data, status, bad: bad.data, refused: refused.error, stale: stale.error, disconnected: disconnected.data, after}))
+console.log(JSON.stringify({nonce, replay: replay.error, swap: swap.error, good: good.data, status, bad: bad.data, refused: refused.error, stale: stale.error, disconnected: disconnected.data, after}))
 console.log(ok ? 'SELFTEST PASS' : 'SELFTEST FAIL')
 process.exit(ok ? 0 : 1)
