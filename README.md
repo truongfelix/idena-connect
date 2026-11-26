@@ -70,14 +70,13 @@ Idena apps, and earlier versions, sign it for any site, and a site cannot tell w
 nonce to its token, using it once and letting it expire. A nonce naming no site (no `/`) is still accepted, without
 that protection.
 
-**Give the session to the browser that opens the callback, once.** Another page can also build a link with your
-own endpoints and a token it got from your page: the signature then really goes to you, and that page holds the
-token. Never hand a session out to whoever asks with the token: when the app opens `callback_url` in the person's
-browser, set the session there (a cookie), and mark the token used, so that no later visit or request gets it. The
-app shows as the website the host that receives the signature, and warns when the callback is on another site
-("After the sign-in you go to other.site, not your.site"): keep `callback_url` on your site (another host of it,
-`www.` or `api.`, shows no warning). That warning only catches a page that keeps its own callback; the session on
-the callback is what stops one that uses yours.
+**What the person checks.** Another page can also build a link with your own endpoints, your own callback and a
+token it got from your page: the signature then really goes to you, and the page that holds the token gets the
+sign-in (it can ask with the token, or open your callback first). Your server cannot tell that page from your own.
+What protects the person is the dialog: it shows as the website the host that receives the signature (your.site),
+and warns when the callback is on another site ("After the sign-in you go to other.site, not your.site"). A
+person who started on another website and sees your.site should cancel. Keep `callback_url` on your site (another
+host of it, `www.` or `api.`, shows no warning), so that the warning only shows for such a page.
 
 ## 3. The authentication endpoint
 
@@ -173,7 +172,7 @@ server prints each step (`START`, `AUTH`, `DISCONNECT`).
 - A sign-in proves the person holds the address's key at that moment, nothing more. Bind the nonce to its token,
   use it once and let it expire.
 - Name your host in the nonce (section 2), so that the community desktop app does not sign your nonce for another
-  website, and give the session to the browser that opens the callback, once.
+  website, and keep the callback on your own site.
 - The person sees the host that receives the signature: serve the endpoints from the website people know.
 - The app never signs a text starting with `signin-` or `disconnect-` through a general signing link (`dna://sign`):
   those texts are signed only in its own sign-in and Disconnect, so another page cannot collect them for your site.
