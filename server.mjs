@@ -106,7 +106,8 @@ const server = http.createServer(async (req, res) => {
       const session = sessions.get(token)
       if (!session || typeof address !== 'string') return json(res, {success: false, error: 'unknown token'})
       session.address = address.toLowerCase()
-      session.nonce = `signin-${crypto.randomUUID()}`
+      // The nonce names this site (README, section 2): the app signs it only for this site.
+      session.nonce = `signin-${new URL(BASE).host}/${crypto.randomUUID()}`
       console.log(`START token=${token} address=${session.address}`)
       return json(res, {success: true, data: {nonce: session.nonce}})
     }
